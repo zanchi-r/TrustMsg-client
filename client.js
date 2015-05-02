@@ -1,9 +1,10 @@
 #!/usr/bin/env node
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 var fs = require('fs');
 var readline = require('readline'),
   rl = readline.createInterface(process.stdin, process.stdout);
 var io = require('socket.io-client'),
-  socket = io.connect('http://localhost:8000');
+  socket = io.connect('https://localhost:8000', {secure: true});
 var privKey = '';
 var loggedIn = false;
 
@@ -14,7 +15,7 @@ function register(username, password) {
       fs.mkdir('.keys', function(err) {
         fs.writeFile('.keys/'+username+'.key', data.key, function(err) {
           if (err) throw err;
-        });        
+        });
       });
       privKey = data.key;
     } else {
