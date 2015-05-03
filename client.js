@@ -3,6 +3,7 @@ var fs = require('fs');
 var io = require('socket.io-client'),
   socket = io.connect('https://localhost:8000', {secure: true});
 var privKey = '';
+var username = undefined;
 var loggedIn = false;
 
 function addToChat(content) {
@@ -32,6 +33,7 @@ function register(username, password) {
 socket.on('login_response', function(data) {
   if (data.result == 'ok') {
     loggedIn = true;
+    username = data.username;
     addToChat("Logged In!");
   } else {
     addToChat("Error: Can't login on the server: " + data.error);
@@ -76,8 +78,26 @@ function getMessages() {
   //get_messages
 }
 
+socket.on('create_group_response', function(data) {
+  if (data.result == 'ok') {
+    fs.mkdir('.groups', function(err) {
+      fs.writeFile('.groups/'+data.name+'.id', data.groupID, function(err) {
+        if (err) throw err;
+        addToChat("Group " + data.name + " successfully created");
+      });
+    });
+  } else {
+    addToChat("Error: Can't create the group " + data.name +":" + data.error);
+  }
+});
+
 function createGroup(name) {
-  //create_group
+  var usernames = [];
+  usernames.push(username)
+  socket.emit('create_group', {
+    name: name,
+    usernames: usernames
+  })
 }
 
 function addUserToGroup(groupName, username) {
@@ -103,6 +123,7 @@ function help() {
             /login username password<br/>\
             Once logged in:<br/>\
             /getStatus username<br/>\
+            /createGroup name<br/>\
             message<br/>\
             /exit");
 }
@@ -131,6 +152,9 @@ function inputKeyPress(e)
           break;
         case '/getStatus':
           getStatus(argv[1]);
+          break;
+        case '/createGroup':
+          createGroup(argv[1]);
           break;
         case '/help':
           help();
