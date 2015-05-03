@@ -1,25 +1,25 @@
-#!/usr/bin/env node
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 var fs = require('fs');
-var readline = require('readline'),
-  rl = readline.createInterface(process.stdin, process.stdout);
 var io = require('socket.io-client'),
   socket = io.connect('https://localhost:8000', {secure: true});
 var privKey = '';
 var loggedIn = false;
 
+function addToChat(content) {
+  var chatContainer = document.getElementById("chat-container");
+  var newElement = document.createElement('div');
+  newElement.classname = "chat-elem";
+  newElement.innerHTML = content;
+  chatContainer.appendChild(newElement);
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
 function register(username, password) {
   socket.on('create_account_response', function(data) {
     if (data.result == 'ok') {
-      console.log("Account successfully created");
-      fs.mkdir('.keys', function(err) {
-        fs.writeFile('.keys/'+username+'.key', data.key, function(err) {
-          if (err) throw err;
-        });
-      });
-      privKey = data.key;
+      addToChat("User "+username+" successfully created");
     } else {
-      console.log("Error: Can't create an account on the server: " + data.error);
+      addToChat("Error: Can't create an account on the server: " + data.error);
     }
   });
   socket.emit('create_account', {
@@ -29,77 +29,71 @@ function register(username, password) {
 }
 
 function login(username, password) {
-  fs.readFile('.keys/'+username+'.key', 'utf8', function(err, data) {
-    if (err) {
-      console.log('Error: No private key found for this user');
-      return ;
+  socket.on('login_response', function(data) {
+    if (data.result == 'ok') {
+      loggedIn = true;
+      addToChat("Logged In!");
+    } else {
+      addToChat("Error: Can't login on the server: " + data.error);
     }
-    privKey = data;
-    socket.on('login_response', function(data) {
-      if (data.result == 'ok') {
-        loggedIn = true;
-        console.log("Logged In!");
-      } else {
-        console.log("Error: Can't login on the server: " + data.error);
-      }
-    });
-    socket.emit('login', {
-      username: username,
-      password: password
-    });
+  });
+  socket.emit('login', {
+    username: username,
+    password: password
   });
 }
 
 function sendMessage(msg) {
   socket.emit('message', msg);
-  console.log('me: ' + msg);
+  addToChat('me: ' + msg);
 }
 
 function help() {
-  console.log('TrustMsg 0.0.1\n/register username password\n/login username password\nmessage\n/exit');
+  addToChat('TrustMsg 0.0.1<br/>/register username password<br/>/login username password<br/>message<br/>/exit');
 }
 
 function exit() {
   socket.emit('disconnect');
-  console.log('Disconnected');
+  addToChat('Disconnected');
   process.exit(0);
 }
 
-function mainLoop() {
-  rl.setPrompt('TrustMsg> ');
-  rl.prompt();
-  rl.on('line', function(line) {
-    var argv = line.trim().split(" ");
-    switch(argv[0]) {
-      case '/register':
-        register(argv[1], argv[2]);
-        break;
-      case '/login':
-        login(argv[1], argv[2]);
-        break
-      case '/help':
-        help();
-        break;
-      case '/exit':
-        exit();
-      default:
-        if (loggedIn) {
-          sendMessage(line);
-        } else {
-          console.log('Please login or register first.');
-        }
-        break;
-    }
-    rl.prompt();
-  }).on('close', function() {
-    exit();
-  });
+function inputKeyPress(e)
+{
+  e = e || window.event;
+  if (e.keyCode == 13)
+  {
+      var input = document.getElementById("chat-input");
+      var line = input.value
+      var argv = line.trim().split(" ");
+      input.value = '';
+      switch(argv[0]) {
+        case '/register':
+          register(argv[1], argv[2]);
+          break;
+        case '/login':
+          login(argv[1], argv[2]);
+          break;
+        case '/help':
+          help();
+          break;
+        case '/exit':
+          exit();
+        default:
+          if (loggedIn) {
+            sendMessage(line);
+          } else {
+            addToChat('Please login or register first.');
+          }
+          break;
+      }
+  }
 }
 
 function main() {
+  window.frame = false;
   socket.on('connect', function() {
-    console.log('Connected! please login or register first. For more details /help');
-    mainLoop();
+    addToChat('Connected! please login or register first. For more details /help');
   });
 }
 
