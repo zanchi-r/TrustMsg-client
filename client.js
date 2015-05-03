@@ -14,32 +14,56 @@ function addToChat(content) {
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
+socket.on('create_account_response', function(data) {
+  if (data.result == 'ok') {
+    addToChat("User " + data.username + " successfully created");
+  } else {
+    addToChat("Error: Can't create an account on the server: " + data.error);
+  }
+});
+
 function register(username, password) {
-  socket.on('create_account_response', function(data) {
-    if (data.result == 'ok') {
-      addToChat("User "+username+" successfully created");
-    } else {
-      addToChat("Error: Can't create an account on the server: " + data.error);
-    }
-  });
   socket.emit('create_account', {
     username: username,
     password: password
   });
 }
 
+socket.on('login_response', function(data) {
+  if (data.result == 'ok') {
+    loggedIn = true;
+    addToChat("Logged In!");
+  } else {
+    addToChat("Error: Can't login on the server: " + data.error);
+  }
+});
+
 function login(username, password) {
-  socket.on('login_response', function(data) {
-    if (data.result == 'ok') {
-      loggedIn = true;
-      addToChat("Logged In!");
-    } else {
-      addToChat("Error: Can't login on the server: " + data.error);
-    }
-  });
   socket.emit('login', {
     username: username,
     password: password
+  });
+}
+
+function uploadKey() {
+  //save_public_key
+}
+
+function getPublicKey(username) {
+  //get_public_key
+}
+
+socket.on('get_status_response', function(data) {
+  if (data.result == 'ok') {
+    addToChat(data.username + ": " + data.status);
+  } else {
+    addToChat("Error: Can't get status of :" + data.error);
+  }
+});
+
+function getStatus(username) {
+  socket.emit('get_status', {
+    username: username
   });
 }
 
@@ -48,8 +72,39 @@ function sendMessage(msg) {
   addToChat('me: ' + msg);
 }
 
+function getMessages() {
+  //get_messages
+}
+
+function createGroup(name) {
+  //create_group
+}
+
+function addUserToGroup(groupName, username) {
+  //add_user_to_group
+}
+
+function removeUserFromGroup(groupName, username) {
+  //remove_user_from_group
+}
+
+function getGroupList() {
+  //get_group_list
+}
+
+function getUsersInGroup(name) {
+  //get_users_in_group
+  //Need to be done on the server
+}
+
 function help() {
-  addToChat('TrustMsg 0.0.1<br/>/register username password<br/>/login username password<br/>message<br/>/exit');
+  addToChat("TrustMsg 0.0.1<br/>\
+            /register username password<br/>\
+            /login username password<br/>\
+            Once logged in:<br/>\
+            /getStatus username<br/>\
+            message<br/>\
+            /exit");
 }
 
 function exit() {
@@ -73,6 +128,9 @@ function inputKeyPress(e)
           break;
         case '/login':
           login(argv[1], argv[2]);
+          break;
+        case '/getStatus':
+          getStatus(argv[1]);
           break;
         case '/help':
           help();
