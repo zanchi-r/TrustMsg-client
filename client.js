@@ -134,8 +134,16 @@ function sendGroupMessage(line) {
   }
 }
 
-function exportMessage(msg) {
-  //export encrypted message
+function exportMessage(line) {
+  var regexp = new RegExp("\\S+\\s+(\\S+)\\s+(.*)");
+  var match = regexp.exec(line);
+  if (match != null) {
+    var user = match[1];
+    var message = match[2]; // TODO : encrypt message
+    addToChat("Encrypted message for " + user + ":<br/>" + message);
+  } else {
+    addToChat('Error: /exportmsg: Bad format');
+  }
 }
 
 function getMessages() {
@@ -267,6 +275,7 @@ function help() {
             Once logged in:<br/>\
             /msg user message<br/>\
             /grpmsg group message<br/>\
+            /exportmsg user message<br/>\
             /getStatus username<br/>\
             /createGroup name<br/>\
             /addUserToGroup groupName username<br/>\
@@ -304,6 +313,9 @@ function inputKeyPress(e)
           break;
         case '/grpmsg':
           sendGroupMessage(line);
+          break;
+        case '/exportmsg':
+          exportMessage(line);
           break;
         case '/getStatus':
           getStatus(argv[1]);
