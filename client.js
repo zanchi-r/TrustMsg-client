@@ -3,7 +3,7 @@ var fs = require('fs');
 var io = require('socket.io-client'),
   socket = io.connect('https://localhost:8000', {secure: true});
 var privKey = '';
-var username = undefined;
+var current_username = undefined;
 var loggedIn = false;
 
 function addToChat(content) {
@@ -18,7 +18,7 @@ function addToChat(content) {
 function getGroupID(name) {
   var id;
   try {
-    var id = fs.readFileSync('.groups/'+name+'.id' ,'utf8')
+    var id = fs.readFileSync('./.trustmsg/'+current_username+'/groups/'+name+'.id','utf8')
   } catch (e) {
     id = undefined;
   }
@@ -52,8 +52,9 @@ function register(username, password) {
 socket.on('login_response', function(data) {
   if (data.result == 'ok') {
     loggedIn = true;
-    username = data.username;
+    current_username = data.username;
     addToChat("Logged In!");
+    fs.mkdir('./.trustmsg/' + current_username + '/', function(err) {if (err) throw err;});
     getMessages();
   } else {
     addToChat("Error: Can't login on the server: " + data.error);
@@ -71,8 +72,23 @@ function uploadKey() {
   //save_public_key
 }
 
+socket.on('get_public_key_response', function(data) {
+  if (data.result == 'ok') {
+    fs.mkdir('./.trustmsg/'+current_username+'/keys', function(err) {
+      fs.writeFile('./.trustmsg/'+current_username+'/keys/'+data.username+'.pub', data.key, function(err) {
+        if (err) throw err;
+        // TODO : send symetric key
+      });
+    });
+  } else {
+    addToChat("Error: Can't get public key of " + data.username + ": " + data.error);
+  }
+})
+
 function getPublicKey(username) {
-  //get_public_key
+  socket.emit('get_public_key', {
+    username: username
+  });
 }
 
 function prepareMessage(line) {
@@ -181,8 +197,8 @@ function getStatus(username) {
 
 socket.on('create_group_response', function(data) {
   if (data.result == 'ok') {
-    fs.mkdir('.groups', function(err) {
-      fs.writeFile('.groups/'+data.name+'.id', data.groupID, function(err) {
+    fs.mkdir('./.trustmsg/'+current_username+'/groups', function(err) {
+      fs.writeFile('./.trustmsg/'+current_username+'/groups/'+data.name+'.id', data.groupID, function(err) {
         if (err) throw err;
         addToChat("Group " + data.name + " successfully created");
       });
@@ -194,7 +210,7 @@ socket.on('create_group_response', function(data) {
 
 function createGroup(name) {
   var usernames = [];
-  usernames.push(username)
+  usernames.push(current_username)
   socket.emit('create_group', {
     name: name,
     usernames: usernames
@@ -288,6 +304,7 @@ function help() {
             /register username password<br/>\
             /login username password<br/>\
             Once logged in:<br/>\
+            /addContact username<br/>\
             /msg user message<br/>\
             /grpmsg group message<br/>\
             /exportmsg user message<br/>\
@@ -322,6 +339,9 @@ function inputKeyPress(e)
           break;
         case '/login':
           login(argv[1], argv[2]);
+          break;
+        case '/addContact':
+          getPublicKey(argv[1]);
           break;
         case '/msg':
           sendMessage(line);
@@ -364,6 +384,7 @@ function inputKeyPress(e)
 
 function main() {
   window.frame = false;
+  fs.mkdir('./.trustmsg/', function(err) {if (err) throw err;});
   socket.on('connect', function() {
     addToChat('Connected! please login or register first. For more details /help');
   });
