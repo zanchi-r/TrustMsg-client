@@ -110,16 +110,45 @@ function createGroup(name) {
   })
 }
 
+socket.on('add_user_to_group_response', function(data) {
+  if (data.result == 'ok') {
+    addToChat(data.username + " added to " + data.groupName);
+  } else {
+    addToChat("Error: Can't add " + data.username + "to " + data.groupName + ": " + data.error);
+  }
+});
+
 function addUserToGroup(groupName, username) {
-  //add_user_to_group
+  var groupID = getGroupID(groupName);
+  if (groupID) {
+    socket.emit('add_user_to_group', {
+      groupID: groupID,
+      groupName: groupName,
+      username: username
+    });
+  } else {
+    addToChat("Error: Group " + groupName + " does not exists");
+  }
 }
 
 function removeUserFromGroup(groupName, username) {
   //remove_user_from_group
 }
 
+socket.on('get_group_list_response', function(data) {
+  if (data.result == 'ok') {
+    var result = 'Group list:<br/>';
+    data.groups.forEach(function(group) {
+      result += group.name + '<br/>';
+    });
+    addToChat(result);
+  } else {
+    addToChat("Error: Can't get group list: " + data.error)
+  }
+});
+
 function getGroupList() {
-  //get_group_list
+  socket.emit('get_group_list');
 }
 
 socket.on('get_users_in_group_response', function(data) {
@@ -130,7 +159,7 @@ socket.on('get_users_in_group_response', function(data) {
     });
     addToChat(result);
   } else {
-    addToChat("Error: Can't get usernames in the group " + data.groupName + ":" + data.error)
+    addToChat("Error: Can't get usernames in the group " + data.groupName + ": " + data.error)
   }
 });
 
@@ -153,6 +182,8 @@ function help() {
             Once logged in:<br/>\
             /getStatus username<br/>\
             /createGroup name<br/>\
+            /addUserToGroup groupName username<br/>\
+            /getGroupList<br/>\
             /getUsersInGroup name<br/>\
             message<br/>\
             /exit");
@@ -185,6 +216,12 @@ function inputKeyPress(e)
           break;
         case '/createGroup':
           createGroup(argv[1]);
+          break;
+        case '/addUserToGroup':
+          addUserToGroup(argv[1], argv[2]);
+          break;
+        case '/getGroupList':
+          getGroupList();
           break;
         case '/getUsersInGroup':
           getUsersInGroup(argv[1]);
