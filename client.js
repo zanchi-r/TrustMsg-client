@@ -15,6 +15,16 @@ function addToChat(content) {
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
+function getGroupID(name) {
+  var id;
+  try {
+    var id = fs.readFileSync('.groups/'+name+'.id' ,'utf8')
+  } catch (e) {
+    id = undefined;
+  }
+  return (id);
+}
+
 socket.on('create_account_response', function(data) {
   if (data.result == 'ok') {
     addToChat("User " + data.username + " successfully created");
@@ -112,9 +122,28 @@ function getGroupList() {
   //get_group_list
 }
 
+socket.on('get_users_in_group_response', function(data) {
+  if (data.result == 'ok') {
+    var result = 'Users in ' + data.groupName + ':<br/>';
+    data.usernames.forEach(function(username) {
+      result += username + '<br/>';
+    });
+    addToChat(result);
+  } else {
+    addToChat("Error: Can't get usernames in the group " + data.groupName + ":" + data.error)
+  }
+});
+
 function getUsersInGroup(name) {
-  //get_users_in_group
-  //Need to be done on the server
+  var groupID = getGroupID(name);
+  if (groupID) {
+    socket.emit('get_users_in_group', {
+      groupID : groupID,
+      groupName: name
+    });
+  } else {
+    addToChat("Error: Group " + name + " does not exists");
+  }
 }
 
 function help() {
@@ -124,6 +153,7 @@ function help() {
             Once logged in:<br/>\
             /getStatus username<br/>\
             /createGroup name<br/>\
+            /getUsersInGroup name<br/>\
             message<br/>\
             /exit");
 }
@@ -155,6 +185,9 @@ function inputKeyPress(e)
           break;
         case '/createGroup':
           createGroup(argv[1]);
+          break;
+        case '/getUsersInGroup':
+          getUsersInGroup(argv[1]);
           break;
         case '/help':
           help();
