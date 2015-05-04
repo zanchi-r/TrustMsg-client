@@ -114,7 +114,7 @@ socket.on('add_user_to_group_response', function(data) {
   if (data.result == 'ok') {
     addToChat(data.username + " added to " + data.groupName);
   } else {
-    addToChat("Error: Can't add " + data.username + "to " + data.groupName + ": " + data.error);
+    addToChat("Error: Can't add " + data.username + " to " + data.groupName + ": " + data.error);
   }
 });
 
@@ -131,8 +131,25 @@ function addUserToGroup(groupName, username) {
   }
 }
 
+socket.on('remove_user_from_group_response', function(data) {
+  if (data.result == 'ok') {
+    addToChat(data.username + " removed from " + data.groupName);
+  } else {
+    addToChat("Error: Can't remove " + data.username + " from " + data.groupName + ": " + data.error);
+  }
+});
+
 function removeUserFromGroup(groupName, username) {
-  //remove_user_from_group
+  var groupID = getGroupID(groupName);
+  if (groupID) {
+    socket.emit('remove_user_from_group', {
+      groupID: groupID,
+      groupName: groupName,
+      username: username
+    });
+  } else {
+    addToChat("Error: Group " + groupName + " does not exists");
+  }
 }
 
 socket.on('get_group_list_response', function(data) {
@@ -183,6 +200,7 @@ function help() {
             /getStatus username<br/>\
             /createGroup name<br/>\
             /addUserToGroup groupName username<br/>\
+            /removeUserFromGroup groupName username<br/>\
             /getGroupList<br/>\
             /getUsersInGroup name<br/>\
             message<br/>\
@@ -219,6 +237,9 @@ function inputKeyPress(e)
           break;
         case '/addUserToGroup':
           addUserToGroup(argv[1], argv[2]);
+          break;
+        case '/removeUserFromGroup':
+          removeUserFromGroup(argv[1], argv[2]);
           break;
         case '/getGroupList':
           getGroupList();
