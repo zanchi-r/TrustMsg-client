@@ -65,6 +65,80 @@ function getPublicKey(username) {
   //get_public_key
 }
 
+function prepareMessage(line) {
+  var msgRegexp = new RegExp("/msg\\s+(\\S+)\\s+(.*)");
+  var match = msgRegexp.exec(line);
+  if (match == null) {
+    addToChat('Error: /msg: Bad format');
+    return (undefined);
+  } else {
+    // TODO : encrypt message
+    return ({
+      username: match[1],
+      message: match[2]
+    });
+  }
+}
+
+function prepareGroupMessage(line) {
+  var grpRegexp = new RegExp("/grpmsg\\s+(\\S+)\\s+(.*)");
+  var result = grpRegexp.exec(line);
+  if (result == null) {
+    addToChat('Error: /msg: Bad format');
+    return (undefined);
+  } else {
+    var groupID = getGroupID(match[1]);
+    if (groupID == undefined)
+      return (undefined);
+    // TODO : encrypt message
+    return ({
+      groupID: groupID,
+      groupName: match[1],
+      message: match[2]
+    });
+  }
+}
+
+socket.on('message_received', function(data) {
+  var msg = data.message;// TODO : decrypt message
+  if (data.groupName != undefined) {
+    addToChat('<strong class="group-msg">' + data.groupName + '</strong>: ' + msg);
+  } else {
+    addToChat('<strong class="msg">' + data.usernameFrom + '</strong>: ' + msg);
+  }
+});
+
+socket.on('send_message_response', function(data) {
+  if (data.result == 'ko') {
+    addToChat("Error: Can't send message: " + data.error);
+  }
+});
+
+function sendMessage(line) {
+  var msg = prepareMessage(line);
+  if (msg != undefined) {
+    var regexp = new RegExp("\\S+\\s+(\\S+)\\s+(.*)");
+    var match = regexp.exec(line);
+    socket.emit('send_message', msg);
+    addToChat('<strong>me to ' + match[1] + ':</strong> ' + match[2]);
+  }
+}
+
+function sendGroupMessage(line) {
+  var msg = prepareGroupMessage(line);
+  if (msg != undefined) {
+
+  }
+}
+
+function exportMessage(msg) {
+  //export encrypted message
+}
+
+function getMessages() {
+  //get_messages
+}
+
 socket.on('get_status_response', function(data) {
   if (data.result == 'ok') {
     addToChat(data.username + ": " + data.status);
@@ -77,15 +151,6 @@ function getStatus(username) {
   socket.emit('get_status', {
     username: username
   });
-}
-
-function sendMessage(msg) {
-  socket.emit('message', msg);
-  addToChat('me: ' + msg);
-}
-
-function getMessages() {
-  //get_messages
 }
 
 socket.on('create_group_response', function(data) {
@@ -197,6 +262,8 @@ function help() {
             /register username password<br/>\
             /login username password<br/>\
             Once logged in:<br/>\
+            /msg user message<br/>\
+            /grpmsg group message<br/>\
             /getStatus username<br/>\
             /createGroup name<br/>\
             /addUserToGroup groupName username<br/>\
@@ -219,8 +286,8 @@ function inputKeyPress(e)
   if (e.keyCode == 13)
   {
       var input = document.getElementById("chat-input");
-      var line = input.value
-      var argv = line.trim().split(" ");
+      var line = input.value.trim();
+      var argv = line.split(" ");
       input.value = '';
       switch(argv[0]) {
         case '/register':
@@ -228,6 +295,12 @@ function inputKeyPress(e)
           break;
         case '/login':
           login(argv[1], argv[2]);
+          break;
+        case '/msg':
+          sendMessage(line);
+          break;
+        case '/grpmsg':
+          sendGroupMessage(line);
           break;
         case '/getStatus':
           getStatus(argv[1]);
@@ -253,11 +326,7 @@ function inputKeyPress(e)
         case '/exit':
           exit();
         default:
-          if (loggedIn) {
-            sendMessage(line);
-          } else {
-            addToChat('Please login or register first.');
-          }
+          addToChat(line + ": Command not found");
           break;
       }
   }
