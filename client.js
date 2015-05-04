@@ -120,14 +120,17 @@ function sendMessage(line) {
     var regexp = new RegExp("\\S+\\s+(\\S+)\\s+(.*)");
     var match = regexp.exec(line);
     socket.emit('send_message', msg);
-    addToChat('<strong>me to ' + match[1] + ':</strong> ' + match[2]);
+    addToChat('<strong class="msg">me to ' + match[1] + ':</strong> ' + match[2]);
   }
 }
 
 function sendGroupMessage(line) {
   var msg = prepareGroupMessage(line);
   if (msg != undefined) {
-
+    var regexp = new RegExp("\\S+\\s+(\\S+)\\s+(.*)");
+    var match = regexp.exec(line);
+    socket.emit('send_message', msg);
+    addToChat('<strong class="msg">me to ' + match[1] + ':</strong> ' + match[2]);
   }
 }
 
