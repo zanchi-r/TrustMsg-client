@@ -25,6 +25,15 @@ function getGroupID(name) {
   return (id);
 }
 
+function messageReceived(data) {
+  var msg = data.message;// TODO : decrypt message
+  if (data.groupName != undefined) {
+    addToChat('<strong class="group-msg">' + data.groupName + '</strong>: ' + msg);
+  } else {
+    addToChat('<strong class="msg">' + data.usernameFrom + '</strong>: ' + msg);
+  }
+}
+
 socket.on('create_account_response', function(data) {
   if (data.result == 'ok') {
     addToChat("User " + data.username + " successfully created");
@@ -45,6 +54,7 @@ socket.on('login_response', function(data) {
     loggedIn = true;
     username = data.username;
     addToChat("Logged In!");
+    getMessages();
   } else {
     addToChat("Error: Can't login on the server: " + data.error);
   }
@@ -100,12 +110,7 @@ function prepareGroupMessage(line) {
 }
 
 socket.on('message_received', function(data) {
-  var msg = data.message;// TODO : decrypt message
-  if (data.groupName != undefined) {
-    addToChat('<strong class="group-msg">' + data.groupName + '</strong>: ' + msg);
-  } else {
-    addToChat('<strong class="msg">' + data.usernameFrom + '</strong>: ' + msg);
-  }
+  messageReceived(data);
 });
 
 socket.on('send_message_response', function(data) {
@@ -146,15 +151,25 @@ function exportMessage(line) {
   }
 }
 
+socket.on('get_messages_response', function(data) {
+  if (data.result == 'ok') {
+    data.messages.foreach(function(message) {
+      messageReceived(message);
+    });
+  } else {
+    addToChat("Error: Can't get messages : " + data.error);
+  }
+});
+
 function getMessages() {
-  //get_messages
+  socket.emit('get_messages');
 }
 
 socket.on('get_status_response', function(data) {
   if (data.result == 'ok') {
     addToChat(data.username + ": " + data.status);
   } else {
-    addToChat("Error: Can't get status of :" + data.error);
+    addToChat("Error: Can't get status of : " + data.error);
   }
 });
 
@@ -173,7 +188,7 @@ socket.on('create_group_response', function(data) {
       });
     });
   } else {
-    addToChat("Error: Can't create the group " + data.name +":" + data.error);
+    addToChat("Error: Can't create the group " + data.name +": " + data.error);
   }
 });
 
