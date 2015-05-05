@@ -106,6 +106,9 @@ socket.on('key_exchange_received', function(data) {
   data. key = data.key; // TODO : decrypt
   fs.writeFile('./.trustmsg/'+current_username+'/keys/'+data.usernameFrom+'.sym', data.key, function(err) {
     if (err && err.code != 'EEXIST') throw err;
+    fs.writeFile('./.trustmsg/'+current_username+'/keys/'+data.usernameFrom+'.pub', data.senderPublicKey, function(err) {
+      if (err && err.code != 'EEXIST') throw err;
+    });
   });
 });
 
