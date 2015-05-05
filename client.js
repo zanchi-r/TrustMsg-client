@@ -84,6 +84,7 @@ function uploadKey() {
   fs.lstat('./.trustmsg/'+current_username+'/keys/pub.key', function(err, stats) {
     if (err || !stats.isFile()) {
       fs.mkdir('./.trustmsg/'+current_username+'/keys/', function(err) {
+        addToChat("Generating public key");
         var pair = keypair();
         fs.writeFile('./.trustmsg/'+current_username+'/keys/priv.key', pair.private, function(err) {
           if (err && err.code != 'EEXIST') throw err;
