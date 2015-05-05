@@ -1,6 +1,7 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 var fs = require('fs');
 var keypair = require('keypair');
+var forge = require('node-forge');
 var io = require('socket.io-client'),
   socket = io.connect('https://localhost:8000', {secure: true});
 var privKey = '';
@@ -19,7 +20,7 @@ function addToChat(content) {
 function getGroupID(name) {
   var id;
   try {
-    var id = fs.readFileSync('./.trustmsg/'+current_username+'/groups/'+name+'.id','utf8')
+    var id = fs.readFileSync('./.trustmsg/'+current_username+'/groups/'+name+'.id','utf8');
   } catch (e) {
     id = undefined;
   }
@@ -57,6 +58,7 @@ socket.on('login_response', function(data) {
     fs.mkdir('./.trustmsg/'+current_username+'/', function(err) {
       if (err && err.code != 'EEXIST') throw err;
       uploadKey();
+      getKeyExchanges();
       addToChat("Logged In!");
       getMessages();
     });
@@ -100,12 +102,36 @@ function uploadKey() {
   });
 }
 
+socket.on('key_exchange_received', function(data) {
+  data. key = data.key; // TODO : decrypt
+  fs.writeFile('./.trustmsg/'+current_username+'/keys/'+data.usernameFrom+'.sym', data.key, function(err) {
+    if (err && err.code != 'EEXIST') throw err;
+  });
+});
+
+function getKeyExchanges() {
+  socket.emit('get_key_exchanges');
+}
+
+function sendKeyExchange(usernameTo) {
+  var key = forge.random.getBytesSync(32);
+  var senderPublicKey = fs.readFileSync('./.trustmsg/'+current_username+'/keys/pub.key','utf8');
+  fs.writeFile('./.trustmsg/'+current_username+'/keys/'+usernameTo+'.sym', key, function(err) {
+    if (err && err.code != 'EEXIST') throw err;
+    socket.emit('key_exchange', {
+      'username': usernameTo,
+      'senderPublicKey': senderPublicKey,
+      'key': key
+    });
+  });
+}
+
 socket.on('get_public_key_response', function(data) {
   if (data.result == 'ok') {
     fs.mkdir('./.trustmsg/'+current_username+'/keys/', function(err) {
       fs.writeFile('./.trustmsg/'+current_username+'/keys/'+data.username+'.pub', data.key, function(err) {
         if (err && err.code != 'EEXIST') throw err;
-        // TODO : send symetric key
+        sendKeyExchange(data.username);
       });
     });
   } else {
