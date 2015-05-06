@@ -2,6 +2,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 var fs = require('fs');
 var keypair = require('keypair');
 var forge = require('node-forge');
+var NodeRSA = require('node-rsa');
 var io = require('socket.io-client'),
   socket = io.connect('https://localhost:8000', {secure: true});
 var privKey = '';
@@ -98,6 +99,8 @@ function uploadKey() {
       fs.mkdir('./.trustmsg/'+current_username+'/keys/', function(err) {
         addToChat("Generating public key");
         var pair = keypair();
+        pair.private = pair.private.substring(0, pair.private.length - 1);
+        pair.public = pair.public.substring(0, pair.public.length - 1);
         fs.writeFile('./.trustmsg/'+current_username+'/keys/priv.key', pair.private, function(err) {
           if (err && err.code != 'EEXIST') throw err;
           fs.writeFile('./.trustmsg/'+current_username+'/keys/pub.key', pair.public, function(err) {
@@ -113,7 +116,8 @@ function uploadKey() {
 }
 
 socket.on('key_exchange_received', function(data) {
-  data. key = data.key; // TODO : decrypt
+  var privkey = new NodeRSA(fs.readFileSync('./.trustmsg/'+current_username+'/keys/priv.key','utf8'), 'pkcs1-private-pem');
+  data.key = privkey.decrypt(data.key, 'utf8');
   fs.writeFile('./.trustmsg/'+current_username+'/keys/'+data.usernameFrom+'.sym', data.key, function(err) {
     if (err && err.code != 'EEXIST') throw err;
     fs.writeFile('./.trustmsg/'+current_username+'/keys/'+data.usernameFrom+'.pub', data.senderPublicKey, function(err) {
@@ -129,12 +133,13 @@ function getKeyExchanges() {
 function sendKeyExchange(usernameTo) {
   var key = forge.random.getBytesSync(32);
   var senderPublicKey = fs.readFileSync('./.trustmsg/'+current_username+'/keys/pub.key','utf8');
+  var pubkey = new NodeRSA(fs.readFileSync('./.trustmsg/'+current_username+'/keys/'+usernameTo+'.pub','utf8'), 'pkcs1-public-pem');
   fs.writeFile('./.trustmsg/'+current_username+'/keys/'+usernameTo+'.sym', key, function(err) {
     if (err && err.code != 'EEXIST') throw err;
     socket.emit('key_exchange', {
       'username': usernameTo,
       'senderPublicKey': senderPublicKey,
-      'key': key
+      'key': pubkey.encrypt(key, 'base64')
     });
   });
 }
