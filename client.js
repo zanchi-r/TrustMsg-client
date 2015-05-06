@@ -28,11 +28,21 @@ function getGroupID(name) {
 }
 
 function messageReceived(data) {
-  var msg = data.message;// TODO : decrypt message
+  var msg = data.message;
   if (data.groupName != undefined) {
     addToChat('<strong class="group-msg">' + data.groupName + '</strong>: ' + msg);
   } else {
-    addToChat('<strong class="msg">' + data.usernameFrom + '</strong>: ' + msg);
+    var key = fs.readFileSync('./.trustmsg/'+current_username+'/keys/'+data.usernameFrom+'.sym','utf8');
+    if (!key) {
+      addToChat("Error: message received from " + data.usernameFrom + ": key not found");
+    } else {
+      var input = forge.util.createBuffer(msg);
+      var decipher = forge.cipher.createDecipher('AES-CBC', key);
+      decipher.start({iv: ''});
+      decipher.update(input);
+      decipher.finish();
+      addToChat('<strong class="msg">' + data.usernameFrom + '</strong>: ' + forge.util.createBuffer(decipher.output.toString('utf8')));
+    }
   }
 }
 
@@ -155,18 +165,28 @@ function prepareMessage(line) {
     addToChat('Error: /msg: Bad format');
     return (undefined);
   } else {
-    // TODO : encrypt message
-    return ({
-      username: match[1],
-      message: match[2]
-    });
+    var key = fs.readFileSync('./.trustmsg/'+current_username+'/keys/'+match[1]+'.sym','utf8');
+    if (!key) {
+      addToChat("Error: Key not found");
+    } else {
+      var input = forge.util.createBuffer(match[2], 'utf8');
+      var cipher = forge.cipher.createCipher('AES-CBC', key);
+      cipher.start({iv: ''});
+      cipher.update(input);
+      cipher.finish();
+      var ciphertext = cipher.output.getBytes();
+      return ({
+        username: match[1],
+        message: ciphertext
+      });
+    }
   }
 }
 
 function prepareGroupMessage(line) {
   var grpRegexp = new RegExp("/grpmsg\\s+(\\S+)\\s+(.*)");
-  var result = grpRegexp.exec(line);
-  if (result == null) {
+  var match = grpRegexp.exec(line);
+  if (match == null) {
     addToChat('Error: /msg: Bad format');
     return (undefined);
   } else {
