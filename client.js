@@ -198,7 +198,6 @@ function prepareGroupMessage(line) {
     var groupID = getGroupID(match[1]);
     if (groupID == undefined)
       return (undefined);
-    // TODO : encrypt message
     return ({
       groupID: groupID,
       groupName: match[1],
@@ -242,8 +241,13 @@ function exportMessage(line) {
   var match = regexp.exec(line);
   if (match != null) {
     var user = match[1];
-    var message = match[2]; // TODO : encrypt message
-    addToChat("Encrypted message for " + user + ":<br/>" + message);
+    var message = match[2];
+    var pubkey = new NodeRSA(fs.readFileSync('./.trustmsg/'+current_username+'/keys/'+user+'.pub','utf8'), 'pkcs1-public-pem');
+    if (pubkey) {
+      addToChat("Encrypted message for " + user + ":<br/>" + pubkey.encrypt(message, 'base64'));
+    } else {
+      addToChat("Error: key not found for " + user);
+    }
   } else {
     addToChat('Error: /exportmsg: Bad format');
   }
@@ -254,8 +258,9 @@ function decodeMessage(line) {
   var match = regexp.exec(line);
   if (match != null) {
     var user = match[1];
-    var message = match[2]; // TODO : decrypt message
-    addToChat("Decrypted message for " + user + ":<br/>" + message);
+    var message = match[2];
+    var privkey = new NodeRSA(fs.readFileSync('./.trustmsg/'+current_username+'/keys/priv.key','utf8'), 'pkcs1-private-pem');
+    addToChat("Decrypted message for " + user + ":<br/>" + privkey.decrypt(message, 'utf8'));
   } else {
     addToChat('Error: /decodemsg: Bad format');
   }
@@ -482,6 +487,17 @@ function inputKeyPress(e)
 
 function main() {
   window.frame = false;
+
+  // This is a fix to get copy and paste working on Mac OSX
+  var gui = require('nw.gui');
+  if (process.platform === "darwin") {
+    var mb = new gui.Menu({type: 'menubar'});
+    mb.createMacBuiltin('RoboPaint', {
+    hideEdit: false,
+    });
+    gui.Window.get().menu = mb;
+  }
+
   fs.mkdir('./.trustmsg/', function(err) {
     if (err && err.code != 'EEXIST') throw err;
     socket.on('connect', function() {
