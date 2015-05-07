@@ -1,14 +1,28 @@
+// Accept unauthorized tls connection because we generated the certificate
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+/*
+** Load needed modules
+*/
 var fs = require('fs');
 var keypair = require('keypair');
 var forge = require('node-forge');
 var NodeRSA = require('node-rsa');
+// Load socket io client and connect to the main server in SSL
 var io = require('socket.io-client'),
   socket = io.connect('https://localhost:4242', {secure: true});
+
+// Global variables
 var privKey = '';
 var current_username = undefined;
 var loggedIn = false;
 
+/*
+** Add content to chat
+** Create a new div element and append it to the chat-container
+** Params:
+**   - content: The inner HTML of the new element
+*/
 function addToChat(content) {
   var chatContainer = document.getElementById("chat-container");
   var newElement = document.createElement('div');
@@ -18,6 +32,12 @@ function addToChat(content) {
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
+/*
+** Get group id from the name of the group
+** Params:
+**   - name: the group name
+** Returns: the group id
+*/
 function getGroupID(name) {
   var id;
   try {
@@ -28,6 +48,12 @@ function getGroupID(name) {
   return (id);
 }
 
+/*
+** Handle a message received
+** Decipher message and add it to the chat
+** Params:
+**   - data: data received from the server
+*/
 function messageReceived(data) {
   var msg = data.message;
   if (data.groupName != undefined) {
@@ -47,6 +73,12 @@ function messageReceived(data) {
   }
 }
 
+/*
+** Handle create account response from the server
+** Check if the creation succeed and show a message in the chat
+** Params:
+**   - data: data received from the server
+*/
 socket.on('create_account_response', function(data) {
   if (data.result == 'ok') {
     addToChat("User " + data.username + " successfully created");
@@ -55,6 +87,13 @@ socket.on('create_account_response', function(data) {
   }
 });
 
+/*
+** Register a user on the server
+** Emit a message to the socket to register the new account on the server
+** Params:
+**   - username: username of the new account
+**   - password: plain text password of the new account
+*/
 function register(username, password) {
   socket.emit('create_account', {
     username: username,
@@ -62,6 +101,14 @@ function register(username, password) {
   });
 }
 
+/*
+** Handle the login response from the server
+** Check if we are logged in.
+** Upload the public key of the user.
+** Get the pending messages.
+** Params:
+**   - data: data received from the server
+*/
 socket.on('login_response', function(data) {
   if (data.result == 'ok') {
     loggedIn = true;
@@ -78,6 +125,13 @@ socket.on('login_response', function(data) {
   }
 });
 
+/*
+** Login on the server
+** Emit a message to the socket to login the user on the server
+** Params:
+**   - username: username of the account
+**   - password: plain text password of the account
+*/
 function login(username, password) {
   socket.emit('login', {
     username: username,
@@ -85,6 +139,12 @@ function login(username, password) {
   });
 }
 
+/*
+** Handle save public key response from the server
+** Check if the key was successfully uploaded on the server.
+** Params:
+**   - data: data received from the server
+*/
 socket.on('save_public_key_response', function(data) {
   if (data.result == 'ok') {
     addToChat("Public key successfully uploaded");
@@ -93,6 +153,11 @@ socket.on('save_public_key_response', function(data) {
   }
 });
 
+/*
+** Upload the current user public key
+** If the key doesn't exist locally, generate a priv/pub keypair and
+** emit a message to the socket to save the public key on the server.
+*/
 function uploadKey() {
   fs.lstat('./.trustmsg/'+current_username+'/keys/pub.key', function(err, stats) {
     if (err || !stats.isFile()) {
@@ -115,6 +180,13 @@ function uploadKey() {
   });
 }
 
+/*
+** Handle key exchange received from the server
+** Decrypt with the current user private key the common symmetric key
+** sent by another user to communicate with him.
+** Params:
+**   - data: data received from the server
+*/
 socket.on('key_exchange_received', function(data) {
   var privkey = new NodeRSA(fs.readFileSync('./.trustmsg/'+current_username+'/keys/priv.key','utf8'), 'pkcs1-private-pem');
   data.key = privkey.decrypt(data.key, 'utf8');
@@ -126,16 +198,28 @@ socket.on('key_exchange_received', function(data) {
   });
 });
 
+/*
+** Get key exchanges
+** Emit a message to the socket to get the key exchanges on the server.
+*/
 function getKeyExchanges() {
   socket.emit('get_key_exchanges');
 }
 
+/*
+** Send key exchange
+** Check if the exchange key exist if not generate a random 256b key,
+** Encrypt the key with the receiver public key and
+** Emit a message to the socket to save the key exchange on the server.
+** Params:
+**   - usernameTo: the username of the receiver
+*/
 function sendKeyExchange(usernameTo) {
   var key = forge.random.getBytesSync(32);
-  var senderPublicKey = fs.readFileSync('./.trustmsg/'+current_username+'/keys/pub.key','utf8');
-  var pubkey = new NodeRSA(fs.readFileSync('./.trustmsg/'+current_username+'/keys/'+usernameTo+'.pub','utf8'), 'pkcs1-public-pem');
   fs.writeFile('./.trustmsg/'+current_username+'/keys/'+usernameTo+'.sym', key, function(err) {
     if (err && err.code != 'EEXIST') throw err;
+    var senderPublicKey = fs.readFileSync('./.trustmsg/'+current_username+'/keys/pub.key','utf8');
+    var pubkey = new NodeRSA(fs.readFileSync('./.trustmsg/'+current_username+'/keys/'+usernameTo+'.pub','utf8'), 'pkcs1-public-pem');
     socket.emit('key_exchange', {
       'username': usernameTo,
       'senderPublicKey': senderPublicKey,
@@ -144,6 +228,12 @@ function sendKeyExchange(usernameTo) {
   });
 }
 
+/*
+** Handle get public key response from the server
+** Save the public key of the user in a file.
+** Params:
+**   - data: data received from the server
+*/
 socket.on('get_public_key_response', function(data) {
   if (data.result == 'ok') {
     fs.mkdir('./.trustmsg/'+current_username+'/keys/', function(err) {
@@ -157,12 +247,26 @@ socket.on('get_public_key_response', function(data) {
   }
 })
 
+/*
+** Get public key
+** Emit a message to the socket to get the public key of a user on the server.
+** Params:
+**   - username: the username
+*/
 function getPublicKey(username) {
   socket.emit('get_public_key', {
     username: username
   });
 }
 
+/*
+** Prepare a message
+** Extract receiver and the plaintext message from the command line.
+** Cipher the plaintext with the symmetric key share with the receiver.
+** Params:
+**   - line: the command line
+** Returns: the message
+*/
 function prepareMessage(line) {
   var msgRegexp = new RegExp("/msg\\s+(\\S+)\\s+(.*)");
   var match = msgRegexp.exec(line);
@@ -188,6 +292,14 @@ function prepareMessage(line) {
   }
 }
 
+/*
+** Prepare a message
+** Extract group name and the plaintext message from the command line.
+** Get the group id from the group name.
+** Params:
+**   - line: the command line
+** Returns: the message
+*/
 function prepareGroupMessage(line) {
   var grpRegexp = new RegExp("/grpmsg\\s+(\\S+)\\s+(.*)");
   var match = grpRegexp.exec(line);
@@ -206,16 +318,30 @@ function prepareGroupMessage(line) {
   }
 }
 
-socket.on('message_received', function(data) {
-  messageReceived(data);
-});
+/*
+** Handle message received from the server
+** Call the function messageReceived.
+*/
+socket.on('message_received', messageReceived);
 
+/*
+** Handle send message response from the server
+** Check if the message has been send correctly.
+** Params:
+**   - data: data received from the server
+*/
 socket.on('send_message_response', function(data) {
   if (data.result == 'ko') {
     addToChat("Error: Can't send message: " + data.error);
   }
 });
 
+/*
+** Send a message
+** Get the message from prepareMessage then emit the message to the socket.
+** Params:
+**   - line: The command line
+*/
 function sendMessage(line) {
   var msg = prepareMessage(line);
   if (msg != undefined) {
@@ -226,6 +352,12 @@ function sendMessage(line) {
   }
 }
 
+/*
+** Send a group message
+** Get the message from prepareGroupMessage then emit the message to the socket.
+** Params:
+**   - line: The command line
+*/
 function sendGroupMessage(line) {
   var msg = prepareGroupMessage(line);
   if (msg != undefined) {
@@ -236,6 +368,13 @@ function sendGroupMessage(line) {
   }
 }
 
+/*
+** Export a message
+** Encrypt the message with the user public key then display the base64
+** representation in the chat.
+** Params:
+**   - line: The command line
+*/
 function exportMessage(line) {
   var regexp = new RegExp("\\S+\\s+(\\S+)\\s+(.*)");
   var match = regexp.exec(line);
@@ -253,6 +392,13 @@ function exportMessage(line) {
   }
 }
 
+/*
+** Decode a message
+** Decrypt the message with the current user private key
+** then display the plain text representation in the chat.
+** Params:
+**   - line: The command line
+*/
 function decodeMessage(line) {
   var regexp = new RegExp("\\S+\\s+(\\S+)\\s+(.*)");
   var match = regexp.exec(line);
@@ -266,6 +412,12 @@ function decodeMessage(line) {
   }
 }
 
+/*
+** Handle get message response from the server
+** Display pending user messages of the server.
+** Params:
+**   - data: data received from the server
+*/
 socket.on('get_messages_response', function(data) {
   if (data.result == 'ok') {
     data.messages.foreach(function(message) {
@@ -280,6 +432,12 @@ function getMessages() {
   socket.emit('get_messages');
 }
 
+/*
+** Handle get status response from the server
+** Display the status of the user received by the server.
+** Params:
+**   - data: data received from the server
+*/
 socket.on('get_status_response', function(data) {
   if (data.result == 'ok') {
     addToChat(data.username + ": " + data.status);
@@ -294,6 +452,12 @@ function getStatus(username) {
   });
 }
 
+/*
+** Handle the create group response from the server
+** Check if the group has been created.
+** Params:
+**   - data: data received from the server
+*/
 socket.on('create_group_response', function(data) {
   if (data.result == 'ok') {
     fs.mkdir('./.trustmsg/'+current_username+'/groups', function(err) {
@@ -307,6 +471,12 @@ socket.on('create_group_response', function(data) {
   }
 });
 
+/*
+** Create a group on the server
+** Emit a create group message to the server.
+** Params:
+**   - name: the group name
+*/
 function createGroup(name) {
   var usernames = [];
   usernames.push(current_username)
@@ -316,6 +486,12 @@ function createGroup(name) {
   })
 }
 
+/*
+** Handle add user to group response from the server
+** Check if the user has been added to the group.
+** Params:
+**   - data: data received from the server
+*/
 socket.on('add_user_to_group_response', function(data) {
   if (data.result == 'ok') {
     addToChat(data.username + " added to " + data.groupName);
@@ -324,6 +500,13 @@ socket.on('add_user_to_group_response', function(data) {
   }
 });
 
+/*
+** Add a user to a group on the server
+** Emit an add user to group message to the server.
+** Params:
+**   - groupName: the group name
+**   - username: the username
+*/
 function addUserToGroup(groupName, username) {
   var groupID = getGroupID(groupName);
   if (groupID) {
@@ -337,6 +520,12 @@ function addUserToGroup(groupName, username) {
   }
 }
 
+/*
+** Handle the remove user from group response from the server
+** Check if the user has been removed from the server.
+** Params:
+**   - data: data received from the server
+*/
 socket.on('remove_user_from_group_response', function(data) {
   if (data.result == 'ok') {
     addToChat(data.username + " removed from " + data.groupName);
@@ -345,6 +534,13 @@ socket.on('remove_user_from_group_response', function(data) {
   }
 });
 
+/*
+** Remove a user from a group on the server
+** Emit a remove user from group message to the server.
+** Params:
+**   - groupName: the group name
+**   - username: the username
+*/
 function removeUserFromGroup(groupName, username) {
   var groupID = getGroupID(groupName);
   if (groupID) {
@@ -358,6 +554,12 @@ function removeUserFromGroup(groupName, username) {
   }
 }
 
+/*
+** Handle the get group list response from the server.
+** Display in the chat the group list received.
+** Params:
+**   - data: data received from the server
+*/
 socket.on('get_group_list_response', function(data) {
   if (data.result == 'ok') {
     var result = 'Group list:<br/>';
@@ -370,10 +572,22 @@ socket.on('get_group_list_response', function(data) {
   }
 });
 
+/*
+** Get group list
+** Emit a message to the socket to get group list on the server
+*/
 function getGroupList() {
   socket.emit('get_group_list');
 }
 
+/*
+** Handle the login response from the server
+** Check if we are logged in.
+** Upload the public key of the user.
+** Get the pending messages.
+** Params:
+**   - data: data received from the server
+*/
 socket.on('get_users_in_group_response', function(data) {
   if (data.result == 'ok') {
     var result = 'Users in ' + data.groupName + ':<br/>';
@@ -386,6 +600,12 @@ socket.on('get_users_in_group_response', function(data) {
   }
 });
 
+/*
+** Get users in a group
+** Emit a message to the socket to get users in the group
+** Params:
+**   - name: the group name
+*/
 function getUsersInGroup(name) {
   var groupID = getGroupID(name);
   if (groupID) {
@@ -398,6 +618,10 @@ function getUsersInGroup(name) {
   }
 }
 
+/*
+** Help
+** Show trustmsg version and every commands in the chat
+*/
 function help() {
   addToChat("TrustMsg 0.0.1<br/>\
             /register username password<br/>\
@@ -418,12 +642,22 @@ function help() {
             /exit");
 }
 
+/*
+** Exit
+** Disconnect from the server and exit the process.
+*/
 function exit() {
   socket.emit('disconnect');
   addToChat('Disconnected');
   process.exit(0);
 }
 
+/*
+** Handle input key press
+** On Enter key, get the input line and parse the command.
+** Params:
+**   - e: window event
+*/
 function inputKeyPress(e)
 {
   e = e || window.event;
@@ -485,6 +719,10 @@ function inputKeyPress(e)
   }
 }
 
+/*
+** Main function
+** Setup gui, trustmsg directory and the connected message
+*/
 function main() {
   window.frame = false;
 
@@ -506,4 +744,5 @@ function main() {
   });
 }
 
+// call main function
 main();
