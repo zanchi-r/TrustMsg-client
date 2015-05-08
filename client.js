@@ -1,3 +1,4 @@
+var serverUrl = 'https://localhost:4242';
 // Accept unauthorized tls connection because we generated the certificate
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
@@ -10,7 +11,7 @@ var forge = require('node-forge');
 var NodeRSA = require('node-rsa');
 // Load socket io client and connect to the main server in SSL
 var io = require('socket.io-client'),
-  socket = io.connect('https://localhost:4242', {secure: true});
+  socket = io.connect(serverUrl, {secure: true});
 
 // Global variables
 var privKey = '';
